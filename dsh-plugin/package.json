@@ -1,0 +1,29 @@
+{
+  "name": "ida-mcp-dsh",
+  "version": "1.0.0",
+  "private": true,
+  "description": "DeepSeek Harness bundle that connects the local Hex-Rays IDA MCP server over stdio for decompilation, disassembly, and IDAPython analysis.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "bin/launch.sh",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "docs",
+    "icon.svg",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml",
+      "platforms": [
+        "darwin",
+        "linux"
+      ]
+    }
+  }
+}

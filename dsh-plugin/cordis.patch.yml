@@ -1,0 +1,38 @@
+# DSH bundle layer: bridge the Hex-Rays IDA MCP server (stdio) into the harness.
+#
+# @deepseek-ai/dsh-mcp-client starts one server per row and names its tools
+# mcp__<serverName>__<tool>, so this row registers mcp__ida__*.
+#
+# The command is machine-specific: /Users/nax/Code/dsh-ida-mcp is this
+# checkout. Another location needs IDA_MCP_HOME in the dsh process environment
+# before launch (a GUI-launched app may not inherit shell exports), or an edited
+# default in a profile-patch override of this row. The bundle is installed as a
+# link to this directory, so moving the checkout also requires reinstalling it
+# from the new path.
+- insert:
+    - id: ida-mcp
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: ida
+        transport: stdio
+        command: /bin/sh
+        args:
+          - -c
+          - |
+            dir=${IDA_MCP_HOME:-/Users/nax/Code/dsh-ida-mcp}
+            launcher=$dir/dsh-plugin/bin/launch.sh
+            if [ -x "$launcher" ]; then
+                exec "$launcher"
+            elif [ -f "$launcher" ]; then
+                exec sh "$launcher"
+            fi
+            printf 'ida-mcp: launcher not found at %s; set IDA_MCP_HOME to the ida-mcp checkout\n' "$launcher" >&2
+            exit 1
+        # IDA auto-analysis and execute_python can exceed the client's 60 s
+        # default; the server itself allows 300 s to open and 360 s to execute.
+        toolCallTimeoutMs: 420000
+        # First launch may build the local package with uv. A broken launcher,
+        # missing uv, or unusable IDA should fail loudly instead of registering
+        # an empty tool set that silently disappears.
+        startupTimeoutMs: 180000
+        failOnStartupError: true

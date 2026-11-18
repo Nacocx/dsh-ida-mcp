@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "IDA MCP 桥接",
+    "description": "通过 stdio 接入本仓库的 Hex-Rays IDA MCP 服务，把 6 个工具注册为 mcp__ida__*：在 IDA 中打开二进制、运行 IDAPython 反编译与反汇编、查询 ida-domain API、列出或保存数据库、释放会话的数据库租约。首次打开新二进制会在同目录创建 .i64。需要 IDA 9.4+ 及有效许可证、idalib，以及已安装的 uv/uvx。首次 uv tool install 后可离线启动；未安装时 uvx 需要网络或完整缓存。默认使用无头 idalib；IDA GUI 路径要求 IDA 内已安装新版 ida-nexus 插件，并在 dsh 环境中设置 IDA_NEXUS_IDALIB_ONLY=0。IDA 自动分析与 Python 执行可能耗时数分钟，单次工具调用最长等待 7 分钟。启用期间工具 schema 会进入每次请求；启动失败会保持 failed，修好环境并重载或重启后恢复。",
+    "detail": "docs/DETAIL.zh.md"
+  }
+}
