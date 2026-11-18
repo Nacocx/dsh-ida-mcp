@@ -48,9 +48,9 @@ uvx --from /Users/nax/Code/dsh-ida-mcp ida-mcp --help
 bundle 以 `link:` 指向本目录，**移动仓库后必须从新路径重新安装**；`IDA_MCP_HOME` 只影响启动器路径，
 修不好失效的链接。离线使用前先按下一节安装一次 `ida-mcp`；bundle 本身是本地链接，不依赖注册表。
 
-默认启动器路径按 `/Users/nax/Code/dsh-ida-mcp` 写入 patch。仓库换了位置时：改
-`cordis.patch.yml` 的默认路径，或在**启动 dsh 前**设置 `IDA_MCP_HOME`（从 Finder/launchd 启动的
-应用可能不继承 shell 导出的变量），然后从新路径安装。
+`cordis.patch.yml` 里的 `IDA_MCP_HOME` 只作为未安装 `ida-mcp` 时的回退路径；已安装 `ida-mcp` 时
+不会用到它。仓库换了位置时，bundle 的 `link:` 本身需要从新路径重新安装；未安装 `ida-mcp`、想走
+uvx 回退时，才需要改默认路径或在启动 dsh 前设置 `IDA_MCP_HOME`。
 
 ## 从 Git 安装
 
@@ -203,6 +203,8 @@ print("\n".join(db.functions.get_disassembly(func)))
 4. 用 `uv tool install --force --editable` 安装后，在 `UV_CACHE_DIR` 指向空目录、`UV_OFFLINE=1`、
    `PATH=/usr/bin:/bin` 的最小环境下，启动器仍完成 MCP 握手；强制重启运行中的 MCP 服务后，
    新进程直接是 `~/.local/bin/ida-mcp stdio --agent=dsh`，工具重新注册并能调用。
+5. 用 pnpm 拉取 `git+...#<sha>&path:dsh-plugin` 验证子目录安装，并从安装后的
+   `cordis.patch.yml` 提取内联脚本，在空缓存、最小 PATH 下同样完成 MCP 握手。
 
 ## 限制
 
