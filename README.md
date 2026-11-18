@@ -2,6 +2,18 @@
 
 Official Hex-Rays IDA MCP Server, see the [announcement blog post](https://hex-rays.com/blog/hex-rays-ida-mcp-server) for more information.
 
+## DeepSeek Harness (dsh) plugin
+
+This repository also ships a DeepSeek Harness bundle in [`dsh-plugin/`](dsh-plugin/README.md). It exposes the server's tools as `mcp__ida__*`; installing the bundle is self-contained and does not require a separate `uv tool install` or a checkout.
+
+Install it from **Plugins → Add plugin** with:
+
+```text
+git+https://github.com/Nacocx/dsh-ida-mcp.git#main&path:dsh-plugin
+```
+
+Pin a full commit instead of `main` for a reproducible install. See the [plugin README](dsh-plugin/README.md) for the current spec, first-start bootstrap, offline behavior, and configuration.
+
 ## Installation
 
 ### Requirements
