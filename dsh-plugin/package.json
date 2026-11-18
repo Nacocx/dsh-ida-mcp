@@ -10,7 +10,6 @@
     "./icon": "./icon.svg"
   },
   "files": [
-    "bin/launch.sh",
     "cordis.patch.yml",
     "locale/*.json",
     "docs",

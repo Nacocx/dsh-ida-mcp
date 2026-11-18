@@ -3,11 +3,12 @@
 # @deepseek-ai/dsh-mcp-client starts one server per row and names its tools
 # mcp__<serverName>__<tool>, so this row registers mcp__ida__*.
 #
-# The command first looks for an installed `ida-mcp` executable. A bundle
-# installed from a git subdirectory contains only this package, not the Python
-# checkout, so this is what makes `git+...#<commit>&path:dsh-plugin` work with
-# the one-time `uv tool install` setup. If no executable is installed, it falls
-# back to the checkout at IDA_MCP_HOME (default: this checkout) and then uvx.
+# This row is self-bootstrapping. Installing the bundle is enough: on the first
+# start it looks for an existing ida-mcp executable or checkout; if neither is
+# available it installs a private runtime from IDA_MCP_SOURCE (this repository)
+# into IDA_MCP_RUNTIME_DIR and runs it. No separate `uv tool install`, clone, or
+# global command is required. The first start needs network (or a warm uv
+# cache); later starts use the private runtime offline.
 - insert:
     - id: ida-mcp
       name: '@deepseek-ai/dsh-mcp-client'
@@ -20,6 +21,7 @@
           - |
             set -eu
             export IDA_NEXUS_IDALIB_ONLY=${IDA_NEXUS_IDALIB_ONLY:-1}
+
             if [ -n "${IDA_MCP_EXECUTABLE:-}" ]; then
                 if [ ! -x "$IDA_MCP_EXECUTABLE" ]; then
                     printf 'ida-mcp: IDA_MCP_EXECUTABLE is not executable: %s\n' "$IDA_MCP_EXECUTABLE" >&2
@@ -27,6 +29,15 @@
                 fi
                 exec "$IDA_MCP_EXECUTABLE" stdio --agent=dsh
             fi
+
+            source=${IDA_MCP_SOURCE:-git+https://github.com/Nacocx/dsh-ida-mcp.git@main}
+            cache_root=${IDA_MCP_RUNTIME_DIR:-${XDG_CACHE_HOME:-${HOME:-}/.cache}/ida-mcp-dsh}
+            runtime=$cache_root/runtime
+            runtime_bin=$runtime/bin/ida-mcp
+            if [ -x "$runtime_bin" ] && [ "$(cat "$runtime/source" 2>/dev/null || true)" = "$source" ]; then
+                exec "$runtime_bin" stdio --agent=dsh
+            fi
+
             if command -v ida-mcp >/dev/null 2>&1; then
                 exec ida-mcp stdio --agent=dsh
             fi
@@ -38,23 +49,51 @@
                     exec "$candidate" stdio --agent=dsh
                 fi
             done
+
             dir=${IDA_MCP_HOME:-/Users/nax/Code/dsh-ida-mcp}
-            launcher=$dir/dsh-plugin/bin/launch.sh
-            if [ -x "$launcher" ]; then
-                exec "$launcher"
-            elif [ -f "$launcher" ]; then
-                exec sh "$launcher"
+            if [ -f "$dir/pyproject.toml" ] && [ -d "$dir/ida_mcp" ]; then
+                if [ -x "$dir/.venv/bin/ida-mcp" ]; then
+                    exec "$dir/.venv/bin/ida-mcp" stdio --agent=dsh
+                fi
+                if command -v uvx >/dev/null 2>&1; then
+                    exec uvx --from "$dir" ida-mcp stdio --agent=dsh
+                fi
             fi
-            if [ -f "$dir/pyproject.toml" ] && command -v uvx >/dev/null 2>&1; then
-                exec uvx --from "$dir" ida-mcp stdio --agent=dsh
+
+            uv=
+            if command -v uv >/dev/null 2>&1; then
+                uv=$(command -v uv)
+            else
+                for candidate in \
+                    "${HOME:-}/.local/bin/uv" \
+                    /opt/homebrew/bin/uv \
+                    /usr/local/bin/uv
+                do
+                    if [ -x "$candidate" ]; then
+                        uv=$candidate
+                        break
+                    fi
+                done
             fi
-            printf 'ida-mcp: no installed ida-mcp and no checkout at %s; run "uv tool install --force --editable <checkout>" or set IDA_MCP_HOME\n' "$dir" >&2
-            exit 1
+            if [ -z "$uv" ]; then
+                printf 'ida-mcp: no installed ida-mcp and uv not found; install uv or set IDA_MCP_EXECUTABLE\n' >&2
+                exit 1
+            fi
+            mkdir -p "$runtime"
+            if ! UV_TOOL_DIR="$runtime/tools" UV_TOOL_BIN_DIR="$runtime/bin" "$uv" tool install --force "$source" >&2; then
+                printf 'ida-mcp: failed to install the runtime from %s; the first start needs network or a warm uv cache\n' "$source" >&2
+                exit 1
+            fi
+            if [ ! -x "$runtime_bin" ]; then
+                printf 'ida-mcp: runtime install did not create %s\n' "$runtime_bin" >&2
+                exit 1
+            fi
+            printf '%s\n' "$source" > "$runtime/source"
+            exec "$runtime_bin" stdio --agent=dsh
         # IDA auto-analysis and execute_python can exceed the client's 60 s
         # default; the server itself allows 300 s to open and 360 s to execute.
         toolCallTimeoutMs: 420000
-        # First launch may build the local package with uv. A broken launcher,
-        # missing uv, or unusable IDA should fail loudly instead of registering
-        # an empty tool set that silently disappears.
-        startupTimeoutMs: 180000
+        # The first start may install the private runtime; later starts are
+        # local. A broken bootstrap or unusable IDA must fail loudly.
+        startupTimeoutMs: 600000
         failOnStartupError: true
