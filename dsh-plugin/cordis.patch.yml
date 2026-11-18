@@ -3,12 +3,11 @@
 # @deepseek-ai/dsh-mcp-client starts one server per row and names its tools
 # mcp__<serverName>__<tool>, so this row registers mcp__ida__*.
 #
-# The command is machine-specific: /Users/nax/Code/dsh-ida-mcp is this
-# checkout. Another location needs IDA_MCP_HOME in the dsh process environment
-# before launch (a GUI-launched app may not inherit shell exports), or an edited
-# default in a profile-patch override of this row. The bundle is installed as a
-# link to this directory, so moving the checkout also requires reinstalling it
-# from the new path.
+# The command first looks for an installed `ida-mcp` executable. A bundle
+# installed from a git subdirectory contains only this package, not the Python
+# checkout, so this is what makes `git+...#<commit>&path:dsh-plugin` work with
+# the one-time `uv tool install` setup. If no executable is installed, it falls
+# back to the checkout at IDA_MCP_HOME (default: this checkout) and then uvx.
 - insert:
     - id: ida-mcp
       name: '@deepseek-ai/dsh-mcp-client'
@@ -19,6 +18,26 @@
         args:
           - -c
           - |
+            set -eu
+            export IDA_NEXUS_IDALIB_ONLY=${IDA_NEXUS_IDALIB_ONLY:-1}
+            if [ -n "${IDA_MCP_EXECUTABLE:-}" ]; then
+                if [ ! -x "$IDA_MCP_EXECUTABLE" ]; then
+                    printf 'ida-mcp: IDA_MCP_EXECUTABLE is not executable: %s\n' "$IDA_MCP_EXECUTABLE" >&2
+                    exit 1
+                fi
+                exec "$IDA_MCP_EXECUTABLE" stdio --agent=dsh
+            fi
+            if command -v ida-mcp >/dev/null 2>&1; then
+                exec ida-mcp stdio --agent=dsh
+            fi
+            for candidate in \
+                "${HOME:-}/.local/bin/ida-mcp" \
+                "${HOME:-}/.local/share/uv/tools/ida-mcp/bin/ida-mcp"
+            do
+                if [ -x "$candidate" ]; then
+                    exec "$candidate" stdio --agent=dsh
+                fi
+            done
             dir=${IDA_MCP_HOME:-/Users/nax/Code/dsh-ida-mcp}
             launcher=$dir/dsh-plugin/bin/launch.sh
             if [ -x "$launcher" ]; then
@@ -26,7 +45,10 @@
             elif [ -f "$launcher" ]; then
                 exec sh "$launcher"
             fi
-            printf 'ida-mcp: launcher not found at %s; set IDA_MCP_HOME to the ida-mcp checkout\n' "$launcher" >&2
+            if [ -f "$dir/pyproject.toml" ] && command -v uvx >/dev/null 2>&1; then
+                exec uvx --from "$dir" ida-mcp stdio --agent=dsh
+            fi
+            printf 'ida-mcp: no installed ida-mcp and no checkout at %s; run "uv tool install --force --editable <checkout>" or set IDA_MCP_HOME\n' "$dir" >&2
             exit 1
         # IDA auto-analysis and execute_python can exceed the client's 60 s
         # default; the server itself allows 300 s to open and 360 s to execute.

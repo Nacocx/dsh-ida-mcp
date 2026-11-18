@@ -10,8 +10,8 @@
 | 文件 | 作用 |
 | --- | --- |
 | `package.json` | bundle 清单：`dsh.bundle.patch` 指向本目录的 patch，并导出 locale 与图标 |
-| `cordis.patch.yml` | 插入一条 `mcp-client` 配置行：`serverName: ida`、stdio、启动 `bin/launch.sh` |
-| `bin/launch.sh` | 启动器：优先使用已安装的 `ida-mcp`（离线），否则回退 `uvx --from` |
+| `cordis.patch.yml` | 插入一条 `mcp-client` 配置行：`serverName: ida`、stdio、内联启动脚本（优先已安装的 `ida-mcp`，回退 `launch.sh`/uvx） |
+| `bin/launch.sh` | 本地 checkout 的回退启动器；插件行内联脚本会优先直接使用已安装的 `ida-mcp` |
 | `locale/*.json` | bundle 卡片显示的标题、说明与详情文档路径（中英双语） |
 | `docs/` | 详情页的一句话说明与配图 |
 | `icon.svg` | bundle 图标（36×36，原创） |
@@ -51,6 +51,40 @@ bundle 以 `link:` 指向本目录，**移动仓库后必须从新路径重新�
 默认启动器路径按 `/Users/nax/Code/dsh-ida-mcp` 写入 patch。仓库换了位置时：改
 `cordis.patch.yml` 的默认路径，或在**启动 dsh 前**设置 `IDA_MCP_HOME`（从 Finder/launchd 启动的
 应用可能不继承 shell 导出的变量），然后从新路径安装。
+
+## 从 Git 安装
+
+### 推荐：clone 后安装本地目录
+
+bundle 与仓库里的 `ida_mcp/` 是同一套 checkout，直接安装 `dsh-plugin` 目录最省事：
+
+```bash
+git clone https://github.com/Nacocx/dsh-ida-mcp.git
+cd dsh-ida-mcp
+uv tool install --force --editable .
+```
+
+然后在 Plugins 页 **Add plugin** 填 `<clone>/dsh-plugin` 的绝对路径。只要先执行了上面的
+`uv tool install`，clone 不在 `/Users/nax/Code/dsh-ida-mcp` 也不影响启动；只有未安装 `ida-mcp`、
+想走 uvx 回退时，才需要启动 dsh 前设置 `IDA_MCP_HOME=<clone>`，或改 `cordis.patch.yml` 的默认路径。
+
+### 直接安装 git 子目录
+
+如果已经有 `ida-mcp` 命令（上一步的 `uv tool install`），也可以让 DSH 直接安装 bundle 子目录：
+
+```text
+git+https://github.com/Nacocx/dsh-ida-mcp.git#<40位commit>&path:dsh-plugin
+```
+
+`path:` 只安装 `dsh-plugin` 子目录，不包含 `ida_mcp/` 源码；插件行会先找已安装的 `ida-mcp`，
+所以这条路径要求先完成一次：
+
+```bash
+uv tool install --force "git+https://github.com/Nacocx/dsh-ida-mcp.git#<40位commit>"
+```
+
+两处使用同一个完整 commit SHA。没有安装 `ida-mcp` 时，子目录安装需要把 `IDA_MCP_HOME` 指向一份
+checkout；否则启动会报找不到运行时。更新时重新 clone / 重新 `uv tool install` 并换用新的 SHA。
 
 ## 离线使用
 
@@ -110,10 +144,10 @@ UV_OFFLINE=1 ~/.local/bin/ida-mcp --help
 
 ```text
 dsh (mcp-client, stdio)
-  └─ /bin/sh -c "…→ exec dsh-plugin/bin/launch.sh"
+  └─ /bin/sh -c "内联启动脚本"
        ├─ 已安装 ida-mcp（uv tool / .venv / PATH）→ exec ida-mcp stdio（离线）
-       └─ 否则 → uvx --from <仓库> ida-mcp stdio（缓存或网络）
-            └─ idalib worker
+       ├─ IDA_MCP_HOME 指向 checkout → exec dsh-plugin/bin/launch.sh
+       └─ checkout 存在且 uvx 可用 → uvx --from <checkout> ida-mcp stdio（缓存或网络）
 ```
 
 `mcp-client` 为服务建立一个 stdio 连接，`startupTimeoutMs: 180000` 为连接与首次工具同步留出 3 分钟。
@@ -126,7 +160,7 @@ dsh (mcp-client, stdio)
 
 | 变量 | 说明 |
 | --- | --- |
-| `IDA_MCP_HOME` | 仓库根目录；patch 用它拼出启动器路径 |
+| `IDA_MCP_HOME` | 回退 checkout 的根目录；默认 `/Users/nax/Code/dsh-ida-mcp`，用于 `launch.sh` / uvx 回退 |
 | `IDA_MCP_EXECUTABLE` | 指定已安装的 `ida-mcp` 可执行文件；优先级最高，离线时不会调用 uvx |
 | `IDA_MCP_UVX` | 未安装 `ida-mcp` 时指定 `uvx`，覆盖 PATH 与常见路径探测 |
 | `IDA_NEXUS_IDALIB_ONLY` | 默认置为 `1`，强制使用 idalib worker；设为 `0` 才允许 `idat`/GUI |
